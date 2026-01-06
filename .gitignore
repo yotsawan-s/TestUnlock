@@ -4,6 +4,9 @@
 *.xlsm
 unlocked_*
 
+# ยกเว้น: อนุญาตให้ track โฟลเดอร์ test_samples
+!test_samples/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]

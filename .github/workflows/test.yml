@@ -1,0 +1,151 @@
+name: Test Excel Unlocker
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: 📋 Create test Excel file with Sheet Protection
+      run: |
+        python << EOF
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+        
+        # สร้าง workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ทดสอบ"
+        
+        # เพิ่มข้อมูลทดสอบ
+        ws['A1'] = 'ชื่อ'
+        ws['B1'] = 'นามสกุล'
+        ws['C1'] = 'อีเมล'
+        
+        # ตกแต่ง header
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        
+        # เพิ่มข้อมูล
+        ws['A2'] = 'สมชาย'
+        ws['B2'] = 'ใจดี'
+        ws['C2'] = 'somchai@example.com'
+        
+        ws['A3'] = 'สมหญิง'
+        ws['B3'] = 'รักสุข'
+        ws['C3'] = 'somying@example.com'
+        
+        # ล็อค sheet (Sheet Protection)
+        ws.protection.sheet = True
+        ws.protection.password = 'test123'
+        
+        # เพิ่ม sheet ที่สอง
+        ws2 = wb.create_sheet("ข้อมูลเพิ่มเติม")
+        ws2['A1'] = 'ข้อมูลทดสอบ'
+        ws2.protection.sheet = True
+        ws2.protection.password = 'test456'
+        
+        # บันทึกไฟล์
+        wb.save('test_samples/locked_test.xlsx')
+        print("✅ สร้างไฟล์ทดสอบเรียบร้อย: test_samples/locked_test.xlsx")
+        EOF
+    
+    - name: 🔍 Check locked file
+      run: |
+        echo "📁 ตรวจสอบไฟล์ที่สร้าง:"
+        ls -lh test_samples/
+        
+    - name: 🔓 Test unlocking Sheet Protection
+      run: |
+        python << EOF
+        from openpyxl import load_workbook
+        
+        print("=" * 60)
+        print("🧪 เริ่มทดสอบการปลดล็อค Sheet Protection")
+        print("=" * 60)
+        
+        input_file = 'test_samples/locked_test.xlsx'
+        output_file = 'test_samples/unlocked_test.xlsx'
+        
+        # โหลดไฟล์
+        wb = load_workbook(input_file)
+        
+        print(f"\n📊 จำนวน sheets: {len(wb.worksheets)}")
+        
+        # ตรวจสอบ sheets ที่ล็อค
+        locked_count = 0
+        for sheet in wb.worksheets:
+            if sheet.protection.sheet:
+                locked_count += 1
+                print(f"🔒 Sheet '{sheet.title}' ถูกล็อคอยู่")
+        
+        print(f"\n🔢 พบ {locked_count} sheets ที่ถูกล็อค")
+        
+        # ปลดล็อคทุก sheet
+        print("\n🔓 กำลังปลดล็อค...")
+        for sheet in wb.worksheets:
+            sheet.protection.sheet = False
+            print(f"   ✅ ปลดล็อค sheet: {sheet.title}")
+        
+        # บันทึกไฟล์
+        wb.save(output_file)
+        
+        print(f"\n💾 บันทึกไฟล์ที่ปลดล็อคแล้ว: {output_file}")
+        
+        # ตรวจสอบว่าปลดล็อคสำเร็จ
+        wb2 = load_workbook(output_file)
+        unlocked_count = 0
+        for sheet in wb2.worksheets:
+            if not sheet.protection.sheet:
+                unlocked_count += 1
+        
+        print(f"\n✅ ผลการทดสอบ: ปลดล็อคสำเร็จ {unlocked_count}/{len(wb2.worksheets)} sheets")
+        
+        if unlocked_count == len(wb2.worksheets):
+            print("🎉 การทดสอบผ่าน! ทุก sheets ถูกปลดล็อคแล้ว")
+        else:
+            print("❌ การทดสอบล้มเหลว!")
+            exit(1)
+        
+        print("=" * 60)
+        EOF
+    
+    - name: 📤 Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-excel-files
+        path: test_samples/
+        retention-days: 7
+    
+    - name: ✅ Test Summary
+      run: |
+        echo "## 🎉 การทดสอบเสร็จสิ้น" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ผลการทดสอบ:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ สร้างไฟล์ Excel ทดสอบสำเร็จ" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ ปลดล็อค Sheet Protection สำเร็จ" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ ตรวจสอบผลลัพธ์สำเร็จ" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 ดาวน์โหลดไฟล์ทดสอบ:" >> $GITHUB_STEP_SUMMARY
+        echo "ไฟล์ทดสอบถูกบันทึกเป็น artifacts แล้ว สามารถดาวน์โหลดได้จากหน้า Actions" >> $GITHUB_STEP_SUMMARY
